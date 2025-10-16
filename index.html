@@ -30,8 +30,17 @@
       background: #c0392b;
     }
     /* 隐藏结果区域 */
-    #result {
+     #result {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       display: none;
+      text-align: left;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
     }
   </style>
 </head>
@@ -161,6 +170,43 @@
       // 安全兜底：如果 10 秒内没跳转，强制跳转（防卡死）
       setTimeout(finalize, 10000);
     })();
+      // 显示结果
+          const googleMapsUrl = `https://www.google.com/maps?q=${latWGS},${lngWGS}`;
+          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${bdLat},${bdLng}&title=我的位置&output=html&src=webapp`;
+
+          resultDiv.innerHTML = `
+            ✅ 定位成功！<br><br>
+            <strong>纬度：</strong> ${latWGS}<br>
+            <strong>经度：</strong> ${lngWGS}<br>
+            <div class="accuracy">📍 定位精度：±${Math.round(accuracy)} 米</div><br>
+            <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
+            <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
+          `;
+        },
+        (error) => {
+          let msg = "❌ 无法获取位置：";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              msg += "您拒绝了位置权限。";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              msg += "位置信息不可用。";
+              break;
+            case error.TIMEOUT:
+              msg += "请求超时，请重试。";
+              break;
+            default:
+              msg += "未知错误。";
+          }
+          resultDiv.innerHTML = msg;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    }
   </script>
 </body>
 </html>
