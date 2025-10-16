@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>获取我的位置</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      text-align: center;
+      padding: 40px 20px;
+      background: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    button {
+      background: #3498db;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 20px 0;
+    }
+    button:hover {
+      background: #2980b9;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    a {
+      color: #e74c3c;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>📍 获取我的当前位置</h1>
+  <p>点击下方按钮，允许网站获取您的地理位置。</p>
+  <button onclick="getLocation()">允许获取位置</button>
+  <div id="result"></div>
+
+  <script>
+    function getLocation() {
+      const resultDiv = document.getElementById("result");
+      resultDiv.style.display = "block";
+      resultDiv.innerHTML = "正在请求位置权限...";
+
+      if (!navigator.geolocation) {
+        resultDiv.innerHTML = "❌ 您的浏览器不支持地理定位功能。";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const lat = latitude.toFixed(6);
+          const lng = longitude.toFixed(6);
+          const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${lat},${lng}&title=我的位置&output=html`;
+
+          resultDiv.innerHTML = `
+            ✅ 定位成功！<br><br>
+            <strong>纬度：</strong> ${lat}<br>
+            <strong>经度：</strong> ${lng}<br><br>
+            <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
+            <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
+          `;
+        },
+        (error) => {
+          let msg = "❌ 无法获取位置：";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              msg += "您拒绝了位置权限。请刷新页面并允许访问。";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              msg += "位置信息不可用。";
+              break;
+            case error.TIMEOUT:
+              msg += "请求超时，请重试。";
+              break;
+            default:
+              msg += "发生未知错误。";
+          }
+          resultDiv.innerHTML = msg;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    }
+  </script>
+</body>
+</html>
