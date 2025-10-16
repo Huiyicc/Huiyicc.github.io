@@ -35,6 +35,10 @@
       border-radius: 8px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       display: none;
+      text-align: left;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
     }
     a {
       color: #e74c3c;
@@ -43,6 +47,11 @@
     }
     a:hover {
       text-decoration: underline;
+    }
+    .accuracy {
+      font-size: 0.9em;
+      color: #7f8c8d;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -53,10 +62,67 @@
   <div id="result"></div>
 
   <script>
+    // ========== 坐标转换函数（WGS-84 → 百度 BD-09）==========
+    function outOfChina(lat, lng) {
+      if (lng < 72.004 || lng > 137.8347) return true;
+      if (lat < 0.8293 || lat > 55.8271) return true;
+      return false;
+    }
+
+    function transformLat(x, y) {
+      let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+      ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+      ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+      ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+      return ret;
+    }
+
+    function transformLng(x, y) {
+      let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+      ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+      ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+      ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+      return ret;
+    }
+
+    function wgs84ToGcj02(lat, lng) {
+      const pi = Math.PI;
+      const a = 6378245.0;
+      const ee = 0.006693421622965943;
+
+      if (outOfChina(lat, lng)) return [lat, lng];
+
+      let dLat = transformLat(lng - 105.0, lat - 35.0);
+      let dLng = transformLng(lng - 105.0, lat - 35.0);
+      const radLat = lat / 180.0 * pi;
+      let magic = Math.sin(radLat);
+      magic = 1 - ee * magic * magic;
+      const sqrtMagic = Math.sqrt(magic);
+      dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * pi);
+      dLng = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * pi);
+      return [lat + dLat, lng + dLng];
+    }
+
+    function gcj02ToBd09(lat, lng) {
+      const x = lng;
+      const y = lat;
+      const z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * Math.PI);
+      const theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * Math.PI);
+      const bdLng = z * Math.cos(theta) + 0.0065;
+      const bdLat = z * Math.sin(theta) + 0.006;
+      return [bdLat, bdLng];
+    }
+
+    function wgs84ToBd09(lat, lng) {
+      const gcj = wgs84ToGcj02(lat, lng);
+      return gcj02ToBd09(gcj[0], gcj[1]);
+    }
+
+    // ========== 定位主函数 ==========
     function getLocation() {
       const resultDiv = document.getElementById("result");
       resultDiv.style.display = "block";
-      resultDiv.innerHTML = "正在请求位置权限...";
+      resultDiv.innerHTML = "正在请求位置权限…";
 
       if (!navigator.geolocation) {
         resultDiv.innerHTML = "❌ 您的浏览器不支持地理定位功能。";
@@ -65,16 +131,21 @@
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
-          const lat = latitude.toFixed(6);
-          const lng = longitude.toFixed(6);
-          const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${lat},${lng}&title=我的位置&output=html`;
+          const { latitude, longitude, accuracy } = position.coords;
+          const latWGS = latitude.toFixed(6);
+          const lngWGS = longitude.toFixed(6);
+
+          // 转换为百度 BD-09 坐标
+          const [bdLat, bdLng] = wgs84ToBd09(latitude, longitude);
+
+          const googleMapsUrl = `https://www.google.com/maps?q=${latWGS},${lngWGS}`;
+          const baiduMapsUrl = `https://api.map.baidu.com/marker?location=${bdLat},${bdLng}&title=我的位置&output=html&src=webapp`;
 
           resultDiv.innerHTML = `
             ✅ 定位成功！<br><br>
-            <strong>纬度：</strong> ${lat}<br>
-            <strong>经度：</strong> ${lng}<br><br>
+            <strong>纬度（WGS-84）：</strong> ${latWGS}<br>
+            <strong>经度（WGS-84）：</strong> ${lngWGS}<br>
+            <div class="accuracy">📍 定位精度：±${accuracy.toFixed(0)} 米</div><br>
             <a href="${googleMapsUrl}" target="_blank">在 Google 地图中查看</a> |
             <a href="${baiduMapsUrl}" target="_blank">在 百度地图 中查看</a>
           `;
@@ -86,20 +157,20 @@
               msg += "您拒绝了位置权限。请刷新页面并允许访问。";
               break;
             case error.POSITION_UNAVAILABLE:
-              msg += "位置信息不可用。";
+              msg += "位置信息不可用，请确保设备 GPS 已开启。";
               break;
             case error.TIMEOUT:
-              msg += "请求超时，请重试。";
+              msg += "请求超时，请重试（建议在室外空旷处操作）。";
               break;
             default:
-              msg += "发生未知错误。";
+              msg += "发生未知错误（错误码：" + error.code + "）。";
           }
           resultDiv.innerHTML = msg;
         },
         {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
+          enableHighAccuracy: true,  // 尽可能使用高精度（如 GPS）
+          timeout: 10000,            // 10 秒超时
+          maximumAge: 60000          // 1 分钟内的缓存位置可接受
         }
       );
     }
